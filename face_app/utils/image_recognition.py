@@ -10,7 +10,7 @@ from .face_recognizer import FaceRecognizer
 class FaceRecognitionFromImage:
     def __init__(self):
         self.face_recognizer = FaceRecognizer()
-        self.face_detector = cv2.CascadeClassifier(os.path.join(settings.BASE_DIR, 'face_app/model/haarcascade_frontalface_default.xml'))
+        self.face_detector = cv2.CascadeClassifier(os.path.join(settings.BASE_DIR, 'model/haarcascade_frontalface_default.xml'))
         
         # Font settings
         self.font = cv2.FONT_HERSHEY_SIMPLEX
@@ -34,9 +34,23 @@ class FaceRecognitionFromImage:
             output_path = os.path.join(settings.MEDIA_ROOT, f"processed_{output_base}{output_ext}")
             cv2.imwrite(output_path, processed_img)
             
+            # Fix: Ensure results have JSON-serializable data
+            serializable_results = []
+            for result in results:
+                serializable_result = {
+                    'name': result['name'],
+                    'position': (int(result['position'][0]), int(result['position'][1]))
+                }
+                if 'confidence' in result and result['confidence'] is not None:
+                    serializable_result['confidence'] = float(result['confidence'])
+                else:
+                    serializable_result['confidence'] = None
+                serializable_results.append(serializable_result)
+            
             # Return the relative path for web access
-            relative_output_path = os.path.relpath(output_path, settings.MEDIA_ROOT)
-            return f"{settings.MEDIA_URL}{relative_output_path}", results
+            media_url = settings.MEDIA_URL.rstrip('/')
+            relative_output_path = os.path.relpath(output_path, settings.MEDIA_ROOT).replace('\\', '/')
+            return f"{media_url}/{relative_output_path}", serializable_results
             
         except Exception as e:
             import traceback

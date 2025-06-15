@@ -39,6 +39,15 @@
     </div>
 </div>
 
+<div class="row mt-4">
+    <div class="col-12">
+        <form action="{% url 'face_app:reset_database' %}" method="post" class="d-inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa toàn bộ dữ liệu?')">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Reset dữ liệu</button>
+        </form>
+    </div>
+</div>
+
 {% if people %}
 <div class="mt-5">
     <h2 class="mb-4">Danh sách người dùng</h2>
@@ -50,20 +59,79 @@
                     <th>Tên</th>
                     <th>Số ảnh</th>
                     <th>Ngày thêm</th>
+                    <th>Thao tác</th>
                 </tr>
             </thead>
             <tbody>
                 {% for person in people %}
-                <tr>
+                <tr id="person-row-{{ person.id }}">
                     <td>{{ person.id }}</td>
                     <td>{{ person.name }}</td>
                     <td>{{ person.get_face_count }}</td>
                     <td>{{ person.created_at|date:"d/m/Y H:i" }}</td>
+                    <td>
+                        <button class="btn btn-danger btn-sm delete-person" data-id="{{ person.id }}" title="Xóa người dùng">
+                            <i class="fas fa-times"></i> X
+                        </button>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Xử lý sự kiện xóa người dùng
+        document.querySelectorAll('.delete-person').forEach(button => {
+            button.addEventListener('click', function() {
+                const personId = this.getAttribute('data-id');
+                if (confirm('Bạn có chắc chắn muốn xóa người dùng này?')) {
+                    // Gửi request AJAX để xóa người dùng
+                    fetch(`/face_app/delete_person/${personId}/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Xóa dòng khỏi bảng
+                            const row = document.getElementById(`person-row-${personId}`);
+                            if (row) {
+                                row.remove();
+                            }
+                        } else {
+                            alert('Có lỗi xảy ra: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Có lỗi xảy ra khi xóa người dùng');
+                    });
+                }
+            });
+        });
+        
+        // Function to get CSRF token from cookies
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    });
+</script>
 {% endif %}
 {% endblock %} 

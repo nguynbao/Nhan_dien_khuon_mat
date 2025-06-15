@@ -1,0 +1,45 @@
+{% extends 'face_app/base.html' %}
+
+{% block title %}Xác nhận reset dữ liệu - Hệ thống nhận diện khuôn mặt{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">Xác nhận reset dữ liệu</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>Cảnh báo:</strong> Thao tác này sẽ xóa toàn bộ dữ liệu trong hệ thống, bao gồm:
+                    </div>
+                    
+                    <ul class="list-group mb-4">
+                        <li class="list-group-item list-group-item-danger">Tất cả thông tin người dùng trong cơ sở dữ liệu</li>
+                        <li class="list-group-item list-group-item-danger">Tất cả hình ảnh khuôn mặt đã thu thập</li>
+                        <li class="list-group-item list-group-item-danger">Mô hình nhận diện đã được huấn luyện</li>
+                    </ul>
+                    
+                    <p class="text-danger mb-4">
+                        Thao tác này không thể hoàn tác. Bạn có chắc chắn muốn tiếp tục?
+                    </p>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'face_app:index' %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Hủy bỏ
+                        </a>
+                        <form method="post">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> Xác nhận reset dữ liệu
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

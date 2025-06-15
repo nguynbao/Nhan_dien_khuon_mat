@@ -10,7 +10,7 @@ from django.conf import settings
 class TrainModel:
     def __init__(self):
         self.model = cv2.face.LBPHFaceRecognizer_create()
-        self.detector = cv2.CascadeClassifier(os.path.join(settings.BASE_DIR, "face_app/model/haarcascade_frontalface_default.xml"))
+        self.detector = cv2.CascadeClassifier(os.path.join(settings.BASE_DIR, "model/haarcascade_frontalface_default.xml"))
 
     def get_images_and_labels(self, path):
         """Extract face samples and IDs from dataset folder."""
@@ -47,7 +47,7 @@ class TrainModel:
             
         try:
             self.model.train(face_samples, np.array(ids))
-            model_path = os.path.join(settings.BASE_DIR, 'face_app/model/trainner.yml')
+            model_path = os.path.join(settings.BASE_DIR, 'model/trainner.yml')
             self.model.save(model_path)
             return True, "Model trained successfully!"
         except Exception as e:

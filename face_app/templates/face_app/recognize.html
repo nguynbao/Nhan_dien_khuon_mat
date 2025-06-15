@@ -161,7 +161,7 @@
         loading.classList.remove('d-none');
         
         // Send image for recognition
-        fetch("{% url 'face_app:recognize_face' %}", {
+        fetch("{% url 'face_app:recognize_from_video' %}", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

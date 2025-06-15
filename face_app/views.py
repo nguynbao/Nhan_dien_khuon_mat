@@ -6,6 +6,7 @@ import numpy as np
 import os
 import json
 import base64
+import shutil
 from PIL import Image
 from io import BytesIO
 
@@ -22,6 +23,7 @@ from .utils.user_manager import DatabaseManager
 from .utils.train_model import TrainModel
 from .utils.face_recognizer import FaceRecognizer
 from .utils.image_recognition import FaceRecognitionFromImage
+from .utils.definitions import FRAME_WIDTH, FRAME_HEIGHT
 
 # Initialize components
 db_manager = DatabaseManager()
@@ -52,6 +54,66 @@ def add_user(request):
     
     return render(request, 'face_app/add_user.html')
 
+def reset_database(request):
+    """Reset database and remove all user data."""
+    if request.method == 'POST':
+        # Delete all person records
+        Person.objects.all().delete()
+        
+        # Remove dataset directory
+        dataset_path = os.path.join(settings.MEDIA_ROOT, 'dataSet')
+        if os.path.exists(dataset_path):
+            try:
+                shutil.rmtree(dataset_path)
+                os.makedirs(dataset_path)  # Create empty directory again
+            except Exception as e:
+                print(f"Error deleting dataset directory: {e}")
+        
+        # Remove temp directory
+        temp_path = os.path.join(settings.MEDIA_ROOT, 'temp')
+        if os.path.exists(temp_path):
+            try:
+                shutil.rmtree(temp_path)
+                os.makedirs(temp_path)  # Create empty directory again
+            except Exception as e:
+                print(f"Error deleting temp directory: {e}")
+        
+        # Delete training model file
+        model_path = os.path.join(settings.BASE_DIR, 'model', 'trainner.yml')
+        if os.path.exists(model_path):
+            try:
+                os.remove(model_path)
+            except Exception as e:
+                print(f"Error deleting model file: {e}")
+                
+        return redirect('face_app:index')
+    
+    return render(request, 'face_app/reset_confirm.html')
+
+def delete_person(request, person_id):
+    """Delete a person and their data."""
+    try:
+        person = get_object_or_404(Person, id=person_id)
+        person_name = person.name
+        
+        # Delete person's dataset folder
+        user_folder = os.path.join(settings.MEDIA_ROOT, 'dataSet', f"{person_name}_{person_id}")
+        if os.path.exists(user_folder):
+            shutil.rmtree(user_folder)
+            
+        # Delete from database
+        person.delete()
+        
+        # Return success response if AJAX request
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True})
+            
+        return redirect('face_app:index')
+    except Exception as e:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        return redirect('face_app:index')
+
 @csrf_exempt
 def capture_image(request):
     """API endpoint for capturing face images."""
@@ -61,6 +123,7 @@ def capture_image(request):
             person_id = int(data.get('id'))
             person_name = data.get('name')
             image_data = data.get('image')
+            direction = data.get('direction', 'thang')  # Default to 'thang' if not specified
             
             # Get person object
             person = get_object_or_404(Person, id=person_id)
@@ -76,6 +139,35 @@ def capture_image(request):
             # Convert to CV2 format
             nparr = np.frombuffer(image_data, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            # Flip image like in the original code
+            frame = cv2.flip(frame, 1)
+            
+            # Draw rectangle in center for face positioning guide
+            centerH = frame.shape[0] // 2
+            centerW = frame.shape[1] // 2
+            cv2.rectangle(
+                frame,
+                (centerW - FRAME_WIDTH // 2, centerH - FRAME_HEIGHT // 2),
+                (centerW + FRAME_WIDTH // 2, centerH + FRAME_HEIGHT // 2),
+                (255, 255, 255),
+                5
+            )
+            
+            # Show direction guidance
+            cv2.putText(
+                frame,
+                direction,
+                (centerW - 100, centerH - FRAME_HEIGHT // 2 - 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (0, 0, 255),
+                2,
+                cv2.LINE_AA
+            )
+            
+            # Convert to gray for face detection
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             
             # Process and save the image
             result = db_manager.capture_faces(user_folder, person_id, frame)

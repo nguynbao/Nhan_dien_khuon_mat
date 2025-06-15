@@ -9,13 +9,23 @@
         
         <div class="card mb-4">
             <div class="card-body">
-                <div class="image-container">
+                <div class="image-container position-relative">
                     <video id="video" width="640" height="480" autoplay></video>
                     <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+                    
+                    <!-- Khung giữa màn hình để người dùng đưa mặt vào -->
+                    <div id="face-frame" class="position-absolute" style="border: 5px solid white; display: none;"></div>
+                    
+                    <!-- Hướng dẫn xoay mặt -->
+                    <div id="direction-guide" class="position-absolute text-danger fw-bold" style="top: 20px; left: 50%; transform: translateX(-50%); font-size: 24px; display: none;"></div>
+                    
+                    <!-- Thông báo chuyển hướng -->
+                    <div id="next-direction" class="position-absolute text-warning fw-bold" style="bottom: 20px; left: 50%; transform: translateX(-50%); font-size: 20px; display: none;"></div>
                 </div>
                 
-                <div class="d-grid gap-2">
-                    <button id="capture-btn" class="btn btn-primary">Chụp ảnh</button>
+                <div class="d-grid gap-2 mt-3">
+                    <button id="start-btn" class="btn btn-primary">Bắt đầu tự động chụp</button>
+                    <button id="stop-btn" class="btn btn-danger" style="display: none;">Dừng</button>
                     <button id="finish-btn" class="btn btn-success" style="display: none;">Hoàn thành</button>
                 </div>
             </div>
@@ -41,15 +51,17 @@
                         <p id="status-text">Đang khởi tạo camera...</p>
                         <p>Tổng số ảnh cần chụp: <span id="total-images">200</span></p>
                         <p>Số ảnh đã chụp: <span id="image-count">{{ image_count }}</span></p>
+                        <p>Hướng hiện tại: <span id="current-direction-text">-</span></p>
                     </div>
                 </div>
                 
                 <div class="alert alert-warning">
                     <p>Hướng dẫn:</p>
                     <ul>
-                        <li>Chọn "Chụp ảnh" để bắt đầu chụp</li>
-                        <li>Di chuyển mặt qua các vị trí khác nhau</li>
-                        <li>Chụp ít nhất 50 ảnh để đảm bảo chất lượng nhận diện</li>
+                        <li>Nhấn "Bắt đầu tự động chụp" để bắt đầu</li>
+                        <li>Đưa mặt vào khung giữa màn hình</li>
+                        <li>Nhìn theo các hướng: thẳng, trái, phải, lên, xuống</li>
+                        <li>Chụp đủ 40 ảnh cho mỗi hướng (tổng 200 ảnh)</li>
                     </ul>
                 </div>
             </div>
@@ -64,23 +76,59 @@
     const personName = "{{ person_name }}";
     let capturedImages = {{ image_count }};
     const totalImages = 200;
+    const imagesPerDirection = totalImages / 5; // Chia đều cho 5 hướng
+    
+    // Elements
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const captureBtn = document.getElementById('capture-btn');
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
     const finishBtn = document.getElementById('finish-btn');
     const progressBar = document.getElementById('progress-bar');
     const statusText = document.getElementById('status-text');
     const imageCountElement = document.getElementById('image-count');
+    const faceFrame = document.getElementById('face-frame');
+    const directionGuide = document.getElementById('direction-guide');
+    const nextDirectionNotice = document.getElementById('next-direction');
+    const currentDirectionText = document.getElementById('current-direction-text');
+    
+    // Variables for face detection and auto capture
+    let isCapturing = false;
+    let captureInterval;
+    let directions = ["thang", "trai", "phai", "len", "xuong"];
+    let directionIndex = 0;
+    let currentDirection = directions[0];
+    let directionCounts = {
+        "thang": 0,
+        "trai": 0,
+        "phai": 0,
+        "len": 0,
+        "xuong": 0
+    };
+    
+    // Set up face frame dimensions
+    const frameWidth = 300;
+    const frameHeight = 400;
     
     // Get camera access
     async function setupCamera() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
             video.srcObject = stream;
-            statusText.textContent = 'Camera đã sẵn sàng. Nhấn "Chụp ảnh" để bắt đầu.';
+            statusText.textContent = 'Camera đã sẵn sàng. Nhấn "Bắt đầu tự động chụp" để bắt đầu.';
+            
+            // Position face frame in the center of the video
+            const videoWidth = video.clientWidth;
+            const videoHeight = video.clientHeight;
+            
+            faceFrame.style.width = frameWidth + 'px';
+            faceFrame.style.height = frameHeight + 'px';
+            faceFrame.style.left = ((videoWidth - frameWidth) / 2) + 'px';
+            faceFrame.style.top = ((videoHeight - frameHeight) / 2) + 'px';
         } catch (err) {
             statusText.textContent = 'Không thể kết nối với camera: ' + err.message;
             console.error('Error accessing camera:', err);
+            startBtn.disabled = true;
         }
     }
     
@@ -88,9 +136,22 @@
     setupCamera();
     updateProgress();
     
-    // Capture button click handler
-    captureBtn.addEventListener('click', function() {
-        captureImage();
+    // Start button click handler
+    startBtn.addEventListener('click', function() {
+        if (!isCapturing) {
+            startAutoCapture();
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'block';
+        }
+    });
+    
+    // Stop button click handler
+    stopBtn.addEventListener('click', function() {
+        if (isCapturing) {
+            stopAutoCapture();
+            stopBtn.style.display = 'none';
+            startBtn.style.display = 'block';
+        }
     });
     
     // Finish button click handler
@@ -98,8 +159,35 @@
         window.location.href = "{% url 'face_app:train_model' %}";
     });
     
-    // Capture and send image
-    function captureImage() {
+    // Start auto capture process
+    function startAutoCapture() {
+        isCapturing = true;
+        statusText.textContent = 'Đang tự động chụp. Hãy giữ khuôn mặt ở giữa khung.';
+        
+        // Show face frame and direction guide
+        faceFrame.style.display = 'block';
+        directionGuide.style.display = 'block';
+        directionGuide.textContent = currentDirection;
+        currentDirectionText.textContent = currentDirection;
+        
+        // Capture at regular intervals
+        captureInterval = setInterval(detectAndCapture, 300);
+    }
+    
+    // Stop auto capture process
+    function stopAutoCapture() {
+        isCapturing = false;
+        clearInterval(captureInterval);
+        statusText.textContent = 'Đã dừng chụp. Nhấn "Bắt đầu tự động chụp" để tiếp tục.';
+        
+        // Hide face frame and direction guide
+        faceFrame.style.display = 'none';
+        directionGuide.style.display = 'none';
+        nextDirectionNotice.style.display = 'none';
+    }
+    
+    // Detect face and capture if found
+    function detectAndCapture() {
         const context = canvas.getContext('2d');
         
         // Draw video to canvas
@@ -108,14 +196,12 @@
         // Get image as data URL
         const imageData = canvas.toDataURL('image/jpeg');
         
-        // Send image to server
+        // Send image for face detection and capture
         sendImageToServer(imageData);
     }
     
     // Send captured image to server
     function sendImageToServer(imageData) {
-        statusText.textContent = 'Đang gửi ảnh...';
-        
         fetch("{% url 'face_app:capture_image' %}", {
             method: 'POST',
             headers: {
@@ -124,45 +210,76 @@
             body: JSON.stringify({
                 id: personId,
                 name: personName,
-                image: imageData
+                image: imageData,
+                direction: currentDirection
             })
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                capturedImages = data.image_count;
-                imageCountElement.textContent = capturedImages;
-                
-                updateProgress();
-                
-                if (data.faces_detected > 0) {
-                    if (data.image_saved) {
-                        statusText.textContent = 'Ảnh đã được lưu thành công!';
-                    } else {
-                        statusText.textContent = 'Phát hiện khuôn mặt nhưng không thể lưu ảnh.';
+                if (data.faces_detected > 0 && data.image_saved) {
+                    capturedImages = data.image_count;
+                    imageCountElement.textContent = capturedImages;
+                    
+                    // Update direction count
+                    directionCounts[currentDirection]++;
+                    
+                    // Update progress
+                    updateProgress();
+                    
+                    // Check if need to change direction
+                    if (directionCounts[currentDirection] >= imagesPerDirection) {
+                        changeDirection();
                     }
-                } else {
-                    statusText.textContent = 'Không phát hiện được khuôn mặt trong ảnh. Vui lòng thử lại.';
-                }
-                
-                // Show finish button once enough images are captured
-                if (capturedImages >= 50) {
-                    finishBtn.style.display = 'block';
-                }
-                
-                // Stop capturing once we reach the maximum
-                if (capturedImages >= totalImages) {
-                    statusText.textContent = 'Đã chụp đủ số lượng ảnh!';
-                    captureBtn.disabled = true;
+                    
+                    // Show finish button once enough images are captured
+                    if (capturedImages >= totalImages * 0.25) {
+                        finishBtn.style.display = 'block';
+                    }
+                    
+                    // Stop capturing once we reach the maximum
+                    if (capturedImages >= totalImages) {
+                        stopAutoCapture();
+                        statusText.textContent = 'Đã chụp đủ số lượng ảnh!';
+                        startBtn.disabled = true;
+                    }
                 }
             } else {
-                statusText.textContent = 'Lỗi: ' + data.error;
+                console.error('Error:', data.error);
             }
         })
         .catch(error => {
-            statusText.textContent = 'Lỗi kết nối: ' + error.message;
             console.error('Error sending image:', error);
         });
+    }
+    
+    // Change direction for face capture
+    function changeDirection() {
+        // Show next direction notice
+        const nextDirectionIndex = (directionIndex + 1) % directions.length;
+        const nextDirection = directions[nextDirectionIndex];
+        
+        nextDirectionNotice.style.display = 'block';
+        nextDirectionNotice.textContent = `Hãy nhìn ${nextDirection}`;
+        
+        // Pause capturing for 3 seconds
+        clearInterval(captureInterval);
+        
+        setTimeout(() => {
+            // Update direction
+            directionIndex = nextDirectionIndex;
+            currentDirection = directions[directionIndex];
+            
+            // Update UI
+            directionGuide.textContent = currentDirection;
+            currentDirectionText.textContent = currentDirection;
+            nextDirectionNotice.style.display = 'none';
+            
+            // Resume capturing
+            if (isCapturing) {
+                captureInterval = setInterval(detectAndCapture, 300);
+            }
+        }, 3000);
     }
     
     // Update progress bar

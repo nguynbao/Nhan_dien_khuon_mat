@@ -35,10 +35,14 @@ class DatabaseManager:
         
         In Django context, we'll process single frames sent from the client.
         """
-        detector = cv2.CascadeClassifier(os.path.join(settings.BASE_DIR, "face_app/model/haarcascade_frontalface_default.xml"))
+        detector = cv2.CascadeClassifier(os.path.join(settings.BASE_DIR, "model/haarcascade_frontalface_default.xml"))
         
         # Convert frame to grayscale
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        # Calculate center position for face detection priority
+        centerH = gray.shape[0] // 2
+        centerW = gray.shape[1] // 2
         
         # Detect faces
         faces = detector.detectMultiScale(gray, 1.3, 5)
@@ -49,9 +53,29 @@ class DatabaseManager:
             "file_path": None
         }
         
+        # Find face closest to center if multiple faces detected
         if len(faces) > 0:
-            # We only process the first face detected
-            x, y, w, h = faces[0]
+            # If multiple faces, find the one closest to center
+            if len(faces) > 1:
+                closest_face = None
+                min_distance = float('inf')
+                
+                for (x, y, w, h) in faces:
+                    face_centerX = x + w//2
+                    face_centerY = y + h//2
+                    
+                    # Calculate distance to center
+                    distance = ((face_centerX - centerW)**2 + (face_centerY - centerH)**2)**0.5
+                    
+                    if distance < min_distance:
+                        min_distance = distance
+                        closest_face = (x, y, w, h)
+                
+                # Use the closest face to center
+                x, y, w, h = closest_face
+            else:
+                # Just one face
+                x, y, w, h = faces[0]
             
             # Get existing images count for this user
             existing_files = [f for f in os.listdir(user_folder) if f.endswith('.jpg')]
@@ -59,10 +83,14 @@ class DatabaseManager:
             
             # Save the face image
             file_path = os.path.join(user_folder, f"User.{id}.{sample_num}.jpg")
-            cv2.imwrite(file_path, gray[y:y+h, x:x+w])
+            face_img = gray[y:y+h, x:x+w]
             
-            result["image_saved"] = True
-            result["file_path"] = os.path.relpath(file_path, settings.MEDIA_ROOT)
+            # Ensure face is saved with proper size for training
+            if face_img.shape[0] > 0 and face_img.shape[1] > 0:
+                cv2.imwrite(file_path, face_img)
+                
+                result["image_saved"] = True
+                result["file_path"] = os.path.relpath(file_path, settings.MEDIA_ROOT)
         
         return result
 

@@ -10,13 +10,13 @@ from .definitions import NUM_MATCH_THRESHOLD, GREEN, BLUE
 class FaceRecognizer:
     def __init__(self):
         # Initialize face detector
-        self.face_detector = cv2.CascadeClassifier(os.path.join(settings.BASE_DIR, 'face_app/model/haarcascade_frontalface_default.xml'))
+        self.face_detector = cv2.CascadeClassifier(os.path.join(settings.BASE_DIR, 'model/haarcascade_frontalface_default.xml'))
         if self.face_detector.empty():
             raise ValueError("Error: Haar Cascade file not found.")
         
         # Initialize face recognizer
         self.model = cv2.face.LBPHFaceRecognizer_create()
-        model_path = os.path.join(settings.BASE_DIR, 'face_app/model/trainner.yml')
+        model_path = os.path.join(settings.BASE_DIR, 'model/trainner.yml')
         
         if os.path.exists(model_path):
             try:
@@ -58,12 +58,17 @@ class FaceRecognizer:
         results = []
         
         for (x, y, w, h) in faces:
+            # Convert numpy types to Python native types for JSON serialization
+            x, y, w, h = int(x), int(y), int(w), int(h)
+            
             # Draw rectangle around the face
             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
             
             try:
                 # Recognize the face
                 id, dist = self.model.predict(gray[y:y + h, x:x + w])
+                # Convert numpy types to Python native types
+                id, dist = int(id), float(dist)
                 
                 profile = None
                 if dist < NUM_MATCH_THRESHOLD:
@@ -75,22 +80,22 @@ class FaceRecognizer:
                     cv2.putText(frame, name_text, (x, y + h + 30), self.fontface, self.fontscale, self.fontcolor, 2)
                     results.append({
                         'name': profile[1],
-                        'position': (x, y),
-                        'confidence': dist
+                        'position': (int(x), int(y)),
+                        'confidence': float(dist)
                     })
                 else:
                     cv2.putText(frame, "Name: Unknown", (x, y + h + 30), self.fontface, self.fontscale, self.fontcolor1, 2)
                     results.append({
                         'name': 'Unknown',
-                        'position': (x, y),
-                        'confidence': dist if 'dist' in locals() else None
+                        'position': (int(x), int(y)),
+                        'confidence': float(dist) if 'dist' in locals() else None
                     })
             except Exception as e:
                 print(f"Error in recognition: {e}")
                 cv2.putText(frame, "Recognition error", (x, y + h + 30), self.fontface, self.fontscale, self.fontcolor1, 2)
                 results.append({
                     'name': f"Error: {str(e)}",
-                    'position': (x, y)
+                    'position': (int(x), int(y))
                 })
         
         return frame, results
