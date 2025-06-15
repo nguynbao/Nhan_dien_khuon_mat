@@ -1,0 +1,30 @@
+{% extends 'face_app/base.html' %}
+
+{% block title %}Thêm người dùng - Hệ thống nhận diện khuôn mặt{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <h2 class="mb-4 text-center">Thêm người dùng mới</h2>
+        
+        <div class="card">
+            <div class="card-body">
+                <form method="post" action="{% url 'face_app:add_user' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Họ và tên</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Tiếp tục</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="text-center mt-3">
+            <a href="{% url 'face_app:index' %}" class="btn btn-outline-secondary">Trở về trang chủ</a>
+        </div>
+    </div>
+</div>
+{% endblock %} 

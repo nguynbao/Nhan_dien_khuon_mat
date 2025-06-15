@@ -1,0 +1,234 @@
+{% extends 'face_app/base.html' %}
+
+{% block title %}Nhận diện khuôn mặt - Hệ thống nhận diện khuôn mặt{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2 class="mb-4">Nhận diện khuôn mặt</h2>
+        
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="image-container">
+                    <video id="video" width="640" height="480" autoplay></video>
+                    <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+                    <img id="processed-image" style="max-width: 100%; display: none;" alt="Khuôn mặt đã nhận diện">
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <button id="start-btn" class="btn btn-primary">Bắt đầu nhận diện</button>
+                    <button id="stop-btn" class="btn btn-danger" style="display: none;">Dừng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Kết quả nhận diện</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div id="loading" class="text-center d-none">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Đang tải...</span>
+                        </div>
+                        <p class="mt-2">Đang xử lý...</p>
+                    </div>
+                    
+                    <div id="results-container">
+                        <div class="alert alert-info" id="info-box">
+                            <p>Nhấn nút "Bắt đầu nhận diện" để bắt đầu.</p>
+                        </div>
+                        
+                        <div id="recognition-results" class="d-none">
+                            <h5>Người được nhận diện:</h5>
+                            <ul id="results-list" class="list-group">
+                                <!-- Results will be populated here -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <p>Lưu ý:</p>
+                    <ul>
+                        <li>Đảm bảo ánh sáng đầy đủ</li>
+                        <li>Nhìn thẳng vào camera</li>
+                        <li>Cố định khoảng cách giữa khuôn mặt và camera</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <div class="d-grid gap-2">
+                <a href="{% url 'face_app:upload_image' %}" class="btn btn-outline-primary">Nhận diện từ ảnh</a>
+                <a href="{% url 'face_app:index' %}" class="btn btn-outline-secondary">Trở về trang chủ</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const processedImage = document.getElementById('processed-image');
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const infoBox = document.getElementById('info-box');
+    const recognitionResults = document.getElementById('recognition-results');
+    const resultsList = document.getElementById('results-list');
+    const loading = document.getElementById('loading');
+    
+    let stream = null;
+    let isRecognizing = false;
+    let recognitionInterval = null;
+    
+    // Get camera access
+    async function setupCamera() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+            infoBox.textContent = 'Camera đã sẵn sàng. Nhấn "Bắt đầu nhận diện" để bắt đầu.';
+        } catch (err) {
+            infoBox.textContent = 'Không thể kết nối với camera: ' + err.message;
+            console.error('Error accessing camera:', err);
+            startBtn.disabled = true;
+        }
+    }
+    
+    // Initialize
+    setupCamera();
+    
+    // Start button click handler
+    startBtn.addEventListener('click', function() {
+        if (!isRecognizing) {
+            startRecognition();
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'block';
+        }
+    });
+    
+    // Stop button click handler
+    stopBtn.addEventListener('click', function() {
+        if (isRecognizing) {
+            stopRecognition();
+            stopBtn.style.display = 'none';
+            startBtn.style.display = 'block';
+        }
+    });
+    
+    // Start recognition process
+    function startRecognition() {
+        isRecognizing = true;
+        infoBox.classList.add('d-none');
+        video.style.display = 'block';
+        processedImage.style.display = 'none';
+        
+        // Perform recognition every few seconds
+        recognitionInterval = setInterval(() => {
+            captureAndRecognize();
+        }, 2000); // Recognize every 2 seconds
+        
+        // Also do an initial recognition immediately
+        captureAndRecognize();
+    }
+    
+    // Stop recognition process
+    function stopRecognition() {
+        isRecognizing = false;
+        clearInterval(recognitionInterval);
+        recognitionInterval = null;
+        infoBox.classList.remove('d-none');
+        infoBox.textContent = 'Nhận diện đã dừng. Nhấn "Bắt đầu nhận diện" để tiếp tục.';
+    }
+    
+    // Capture frame and send for recognition
+    function captureAndRecognize() {
+        const context = canvas.getContext('2d');
+        
+        // Draw video to canvas
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Get image as data URL
+        const imageData = canvas.toDataURL('image/jpeg');
+        
+        // Show loading
+        loading.classList.remove('d-none');
+        
+        // Send image for recognition
+        fetch("{% url 'face_app:recognize_face' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                image: imageData
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Hide loading
+            loading.classList.add('d-none');
+            
+            if (data.success) {
+                // Show processed image
+                processedImage.src = data.processed_image;
+                video.style.display = 'none';
+                processedImage.style.display = 'block';
+                
+                // Display results
+                displayResults(data.results);
+            } else {
+                console.error('Recognition error:', data.error);
+                infoBox.classList.remove('d-none');
+                infoBox.textContent = 'Lỗi: ' + data.error;
+                recognitionResults.classList.add('d-none');
+            }
+        })
+        .catch(error => {
+            // Hide loading
+            loading.classList.add('d-none');
+            console.error('Error during recognition:', error);
+            infoBox.classList.remove('d-none');
+            infoBox.textContent = 'Lỗi kết nối: ' + error.message;
+            recognitionResults.classList.add('d-none');
+        });
+    }
+    
+    // Display recognition results
+    function displayResults(results) {
+        resultsList.innerHTML = '';
+        
+        if (results && results.length > 0) {
+            recognitionResults.classList.remove('d-none');
+            
+            results.forEach(result => {
+                const listItem = document.createElement('li');
+                listItem.className = 'list-group-item';
+                
+                if (result.name === 'Unknown') {
+                    listItem.innerHTML = `<strong>Không xác định</strong>`;
+                } else {
+                    listItem.innerHTML = `<strong>${result.name}</strong>`;
+                    
+                    if (result.confidence) {
+                        listItem.innerHTML += ` (Độ tin cậy: ${Math.round(100 - result.confidence)}%)`;
+                    }
+                }
+                
+                resultsList.appendChild(listItem);
+            });
+        } else {
+            recognitionResults.classList.add('d-none');
+            infoBox.classList.remove('d-none');
+            infoBox.textContent = 'Không phát hiện được khuôn mặt.';
+        }
+    }
+</script>
+{% endblock %} 

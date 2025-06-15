@@ -1,0 +1,176 @@
+{% extends 'face_app/base.html' %}
+
+{% block title %}Chụp ảnh khuôn mặt - Hệ thống nhận diện khuôn mặt{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2 class="mb-4">Chụp ảnh khuôn mặt cho: {{ person_name }}</h2>
+        
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="image-container">
+                    <video id="video" width="640" height="480" autoplay></video>
+                    <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <button id="capture-btn" class="btn btn-primary">Chụp ảnh</button>
+                    <button id="finish-btn" class="btn btn-success" style="display: none;">Hoàn thành</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Trạng thái</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="progress" class="form-label">Tiến trình chụp</label>
+                    <div class="progress">
+                        <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Thông tin</label>
+                    <div class="alert alert-info">
+                        <p id="status-text">Đang khởi tạo camera...</p>
+                        <p>Tổng số ảnh cần chụp: <span id="total-images">200</span></p>
+                        <p>Số ảnh đã chụp: <span id="image-count">{{ image_count }}</span></p>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <p>Hướng dẫn:</p>
+                    <ul>
+                        <li>Chọn "Chụp ảnh" để bắt đầu chụp</li>
+                        <li>Di chuyển mặt qua các vị trí khác nhau</li>
+                        <li>Chụp ít nhất 50 ảnh để đảm bảo chất lượng nhận diện</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const personId = {{ person_id }};
+    const personName = "{{ person_name }}";
+    let capturedImages = {{ image_count }};
+    const totalImages = 200;
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const captureBtn = document.getElementById('capture-btn');
+    const finishBtn = document.getElementById('finish-btn');
+    const progressBar = document.getElementById('progress-bar');
+    const statusText = document.getElementById('status-text');
+    const imageCountElement = document.getElementById('image-count');
+    
+    // Get camera access
+    async function setupCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+            statusText.textContent = 'Camera đã sẵn sàng. Nhấn "Chụp ảnh" để bắt đầu.';
+        } catch (err) {
+            statusText.textContent = 'Không thể kết nối với camera: ' + err.message;
+            console.error('Error accessing camera:', err);
+        }
+    }
+    
+    // Initialize
+    setupCamera();
+    updateProgress();
+    
+    // Capture button click handler
+    captureBtn.addEventListener('click', function() {
+        captureImage();
+    });
+    
+    // Finish button click handler
+    finishBtn.addEventListener('click', function() {
+        window.location.href = "{% url 'face_app:train_model' %}";
+    });
+    
+    // Capture and send image
+    function captureImage() {
+        const context = canvas.getContext('2d');
+        
+        // Draw video to canvas
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Get image as data URL
+        const imageData = canvas.toDataURL('image/jpeg');
+        
+        // Send image to server
+        sendImageToServer(imageData);
+    }
+    
+    // Send captured image to server
+    function sendImageToServer(imageData) {
+        statusText.textContent = 'Đang gửi ảnh...';
+        
+        fetch("{% url 'face_app:capture_image' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                id: personId,
+                name: personName,
+                image: imageData
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                capturedImages = data.image_count;
+                imageCountElement.textContent = capturedImages;
+                
+                updateProgress();
+                
+                if (data.faces_detected > 0) {
+                    if (data.image_saved) {
+                        statusText.textContent = 'Ảnh đã được lưu thành công!';
+                    } else {
+                        statusText.textContent = 'Phát hiện khuôn mặt nhưng không thể lưu ảnh.';
+                    }
+                } else {
+                    statusText.textContent = 'Không phát hiện được khuôn mặt trong ảnh. Vui lòng thử lại.';
+                }
+                
+                // Show finish button once enough images are captured
+                if (capturedImages >= 50) {
+                    finishBtn.style.display = 'block';
+                }
+                
+                // Stop capturing once we reach the maximum
+                if (capturedImages >= totalImages) {
+                    statusText.textContent = 'Đã chụp đủ số lượng ảnh!';
+                    captureBtn.disabled = true;
+                }
+            } else {
+                statusText.textContent = 'Lỗi: ' + data.error;
+            }
+        })
+        .catch(error => {
+            statusText.textContent = 'Lỗi kết nối: ' + error.message;
+            console.error('Error sending image:', error);
+        });
+    }
+    
+    // Update progress bar
+    function updateProgress() {
+        const percentage = Math.min(Math.round((capturedImages / totalImages) * 100), 100);
+        progressBar.style.width = percentage + '%';
+        progressBar.textContent = percentage + '%';
+        progressBar.setAttribute('aria-valuenow', percentage);
+    }
+</script>
+{% endblock %} 

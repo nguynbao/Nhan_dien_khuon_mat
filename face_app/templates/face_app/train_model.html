@@ -1,0 +1,120 @@
+{% extends 'face_app/base.html' %}
+
+{% block title %}Huấn luyện mô hình - Hệ thống nhận diện khuôn mặt{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <h2 class="mb-4 text-center">Huấn luyện mô hình nhận diện</h2>
+        
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="alert alert-info" id="info-box">
+                    <p>Nhấn nút bên dưới để bắt đầu huấn luyện mô hình với dữ liệu khuôn mặt đã thu thập.</p>
+                    <p>Quá trình này có thể mất vài phút tùy thuộc vào lượng dữ liệu.</p>
+                </div>
+                
+                <div id="result-box" class="alert d-none">
+                    <p id="result-message"></p>
+                </div>
+                
+                <div class="d-grid">
+                    <button id="train-btn" class="btn btn-primary">Bắt đầu huấn luyện</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5>Trạng thái dữ liệu</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div id="loading" class="text-center d-none">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Đang tải...</span>
+                        </div>
+                        <p class="mt-2">Đang huấn luyện mô hình...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center mt-3">
+            <a href="{% url 'face_app:index' %}" class="btn btn-outline-secondary">Trở về trang chủ</a>
+            <a href="{% url 'face_app:recognize_face' %}" id="next-btn" class="btn btn-success d-none">Tiếp tục nhận diện</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const trainBtn = document.getElementById('train-btn');
+    const infoBox = document.getElementById('info-box');
+    const resultBox = document.getElementById('result-box');
+    const resultMessage = document.getElementById('result-message');
+    const loading = document.getElementById('loading');
+    const nextBtn = document.getElementById('next-btn');
+    
+    trainBtn.addEventListener('click', function() {
+        // Show loading spinner
+        loading.classList.remove('d-none');
+        trainBtn.disabled = true;
+        infoBox.classList.add('d-none');
+        
+        // Send training request
+        fetch("{% url 'face_app:train_model' %}", {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Hide loading spinner
+            loading.classList.add('d-none');
+            
+            // Show result
+            resultBox.classList.remove('d-none');
+            if (data.success) {
+                resultBox.classList.add('alert-success');
+                resultBox.classList.remove('alert-danger');
+                resultMessage.textContent = data.message;
+                nextBtn.classList.remove('d-none');
+            } else {
+                resultBox.classList.add('alert-danger');
+                resultBox.classList.remove('alert-success');
+                resultMessage.textContent = data.message;
+                trainBtn.disabled = false;
+            }
+        })
+        .catch(error => {
+            // Hide loading spinner
+            loading.classList.add('d-none');
+            
+            // Show error
+            resultBox.classList.remove('d-none');
+            resultBox.classList.add('alert-danger');
+            resultBox.classList.remove('alert-success');
+            resultMessage.textContent = 'Đã xảy ra lỗi: ' + error.message;
+            trainBtn.disabled = false;
+        });
+    });
+    
+    {% if success is not None %}
+        resultBox.classList.remove('d-none');
+        if ({{ success|lower }}) {
+            resultBox.classList.add('alert-success');
+            resultBox.classList.remove('alert-danger');
+            nextBtn.classList.remove('d-none');
+        } else {
+            resultBox.classList.add('alert-danger');
+            resultBox.classList.remove('alert-success');
+        }
+        resultMessage.textContent = "{{ message }}";
+        infoBox.classList.add('d-none');
+    {% endif %}
+</script>
+{% endblock %} 

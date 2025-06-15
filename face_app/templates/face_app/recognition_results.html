@@ -1,0 +1,126 @@
+{% extends 'face_app/base.html' %}
+
+{% block title %}Kết quả nhận diện - Hệ thống nhận diện khuôn mặt{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2 class="mb-4">Kết quả nhận diện</h2>
+        
+        <div class="card mb-4">
+            <div class="card-body">
+                {% if error %}
+                    <div class="alert alert-danger">
+                        {{ error }}
+                    </div>
+                {% else %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h5>Ảnh gốc</h5>
+                                </div>
+                                <div class="card-body text-center">
+                                    <img src="{{ MEDIA_URL }}{{ original_image }}" alt="Ảnh gốc" class="img-fluid">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h5>Ảnh đã xử lý</h5>
+                                </div>
+                                <div class="card-body text-center">
+                                    <img src="{{ processed_image }}" alt="Ảnh đã xử lý" class="img-fluid">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h4>Kết quả nhận diện</h4>
+                        
+                        {% if results and results|length > 0 %}
+                            <div class="table-responsive">
+                                <table class="table table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>STT</th>
+                                            <th>Tên</th>
+                                            <th>Vị trí</th>
+                                            <th>Độ tin cậy</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for result in results %}
+                                        <tr>
+                                            <td>{{ forloop.counter }}</td>
+                                            <td>{% if result.name %}{{ result.name }}{% else %}Không xác định{% endif %}</td>
+                                            <td>{{ result.position.0 }}, {{ result.position.1 }}</td>
+                                            <td>
+                                                {% if result.confidence %}
+                                                    {% if result.confidence < 50 %}
+                                                        <span class="text-success">Cao ({{ result.confidence }})</span>
+                                                    {% elif result.confidence < 70 %}
+                                                        <span class="text-warning">Trung bình ({{ result.confidence }})</span>
+                                                    {% else %}
+                                                        <span class="text-danger">Thấp ({{ result.confidence }})</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                Không phát hiện được khuôn mặt trong ảnh.
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endif %}
+                
+                <div class="d-grid gap-2 mt-4">
+                    <a href="{% url 'face_app:upload_image' %}" class="btn btn-primary">Tải ảnh khác</a>
+                    <a href="{% url 'face_app:index' %}" class="btn btn-outline-secondary">Trở về trang chủ</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Thông tin</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <p><strong>Khuôn mặt nhận diện được:</strong> {{ results|length }}</p>
+                    
+                    {% if results and results|length > 0 %}
+                        <p><strong>Người được nhận diện:</strong></p>
+                        <ul>
+                            {% for result in results %}
+                                <li>{% if result.name %}{{ result.name }}{% else %}Không xác định{% endif %}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+                
+                <div class="alert alert-warning">
+                    <p>Lưu ý về độ tin cậy:</p>
+                    <ul>
+                        <li><span class="text-success">Cao</span>: &lt; 50</li>
+                        <li><span class="text-warning">Trung bình</span>: 50-70</li>
+                        <li><span class="text-danger">Thấp</span>: &gt; 70</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

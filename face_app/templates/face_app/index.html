@@ -1,0 +1,69 @@
+{% extends 'face_app/base.html' %}
+
+{% block title %}Trang chủ - Hệ thống nhận diện khuôn mặt{% endblock %}
+
+{% block content %}
+<div class="text-center mb-5">
+    <h1 class="display-4 fw-bold">Hệ thống nhận diện khuôn mặt</h1>
+    <p class="lead">Nhận diện khuôn mặt sử dụng OpenCV và Django</p>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h5 class="card-title">Thêm người dùng mới</h5>
+                <p class="card-text">Thêm người dùng mới và chụp ảnh khuôn mặt để huấn luyện mô hình</p>
+                <a href="{% url 'face_app:add_user' %}" class="btn btn-primary">Thêm người dùng</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h5 class="card-title">Huấn luyện mô hình</h5>
+                <p class="card-text">Huấn luyện mô hình nhận diện khuôn mặt với dữ liệu đã thu thập</p>
+                <a href="{% url 'face_app:train_model' %}" class="btn btn-primary">Huấn luyện</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <h5 class="card-title">Nhận diện khuôn mặt</h5>
+                <p class="card-text">Nhận diện khuôn mặt từ webcam hoặc ảnh tĩnh</p>
+                <a href="{% url 'face_app:recognize_face' %}" class="btn btn-primary">Nhận diện từ camera</a>
+                <a href="{% url 'face_app:upload_image' %}" class="btn btn-outline-primary mt-2">Nhận diện từ ảnh</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if people %}
+<div class="mt-5">
+    <h2 class="mb-4">Danh sách người dùng</h2>
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Tên</th>
+                    <th>Số ảnh</th>
+                    <th>Ngày thêm</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for person in people %}
+                <tr>
+                    <td>{{ person.id }}</td>
+                    <td>{{ person.name }}</td>
+                    <td>{{ person.get_face_count }}</td>
+                    <td>{{ person.created_at|date:"d/m/Y H:i" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %} 
