@@ -9,13 +9,13 @@
         
         <div class="card mb-4">
             <div class="card-body">
-                <div class="image-container">
-                    <video id="video" width="640" height="480" autoplay></video>
+                <div class="image-container position-relative">
+                    <video id="video" width="640" height="480" autoplay playsinline></video>
                     <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
-                    <img id="processed-image" style="max-width: 100%; display: none;" alt="Khuôn mặt đã nhận diện">
+                    <canvas id="overlay" width="640" height="480" class="position-absolute top-0 start-0"></canvas>
                 </div>
                 
-                <div class="d-grid gap-2">
+                <div class="d-grid gap-2 mt-3">
                     <button id="start-btn" class="btn btn-primary">Bắt đầu nhận diện</button>
                     <button id="stop-btn" class="btn btn-danger" style="display: none;">Dừng</button>
                 </div>
@@ -76,7 +76,7 @@
 <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const processedImage = document.getElementById('processed-image');
+    const overlay = document.getElementById('overlay');
     const startBtn = document.getElementById('start-btn');
     const stopBtn = document.getElementById('stop-btn');
     const infoBox = document.getElementById('info-box');
@@ -87,12 +87,32 @@
     let stream = null;
     let isRecognizing = false;
     let recognitionInterval = null;
+    let animationFrameId = null;
     
-    // Get camera access
+    // Cấu hình camera với độ phân giải và FPS tối ưu
+    const cameraConstraints = {
+        video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            frameRate: { ideal: 30 }
+        }
+    };
+    
+    // Get camera access with optimized settings
     async function setupCamera() {
         try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            stream = await navigator.mediaDevices.getUserMedia(cameraConstraints);
             video.srcObject = stream;
+            
+            // Đảm bảo video đã load xong
+            await video.play();
+            
+            // Thiết lập kích thước canvas overlay
+            overlay.width = video.videoWidth;
+            overlay.height = video.videoHeight;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
             infoBox.textContent = 'Camera đã sẵn sàng. Nhấn "Bắt đầu nhận diện" để bắt đầu.';
         } catch (err) {
             infoBox.textContent = 'Không thể kết nối với camera: ' + err.message;
@@ -126,15 +146,14 @@
     function startRecognition() {
         isRecognizing = true;
         infoBox.classList.add('d-none');
-        video.style.display = 'block';
-        processedImage.style.display = 'none';
         
-        // Perform recognition every few seconds
-        recognitionInterval = setInterval(() => {
-            captureAndRecognize();
-        }, 2000); // Recognize every 2 seconds
+        // Bắt đầu vòng lặp render
+        requestAnimationFrame(renderFrame);
         
-        // Also do an initial recognition immediately
+        // Thực hiện nhận diện với tần suất thấp hơn
+        recognitionInterval = setInterval(captureAndRecognize, 500);
+        
+        // Thực hiện nhận diện ngay lập tức
         captureAndRecognize();
     }
     
@@ -142,25 +161,39 @@
     function stopRecognition() {
         isRecognizing = false;
         clearInterval(recognitionInterval);
+        cancelAnimationFrame(animationFrameId);
         recognitionInterval = null;
+        
+        // Xóa overlay
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        
         infoBox.classList.remove('d-none');
         infoBox.textContent = 'Nhận diện đã dừng. Nhấn "Bắt đầu nhận diện" để tiếp tục.';
+    }
+    
+    // Render frame function
+    function renderFrame() {
+        if (!isRecognizing) return;
+        
+        // Tiếp tục vòng lặp render
+        animationFrameId = requestAnimationFrame(renderFrame);
     }
     
     // Capture frame and send for recognition
     function captureAndRecognize() {
         const context = canvas.getContext('2d');
         
-        // Draw video to canvas
+        // Vẽ video lên canvas với kích thước thực
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        // Get image as data URL
-        const imageData = canvas.toDataURL('image/jpeg');
+        // Lấy dữ liệu ảnh với chất lượng tốt hơn
+        const imageData = canvas.toDataURL('image/jpeg', 0.9);
         
-        // Show loading
+        // Hiển thị loading
         loading.classList.remove('d-none');
         
-        // Send image for recognition
+        // Gửi ảnh để nhận diện
         fetch("{% url 'face_app:recognize_from_video' %}", {
             method: 'POST',
             headers: {
@@ -173,16 +206,12 @@
         })
         .then(response => response.json())
         .then(data => {
-            // Hide loading
             loading.classList.add('d-none');
             
             if (data.success) {
-                // Show processed image
-                processedImage.src = data.processed_image;
-                video.style.display = 'none';
-                processedImage.style.display = 'block';
-                
-                // Display results
+                // Vẽ kết quả lên overlay
+                drawResults(data.results);
+                // Hiển thị kết quả
                 displayResults(data.results);
             } else {
                 console.error('Recognition error:', data.error);
@@ -192,12 +221,52 @@
             }
         })
         .catch(error => {
-            // Hide loading
             loading.classList.add('d-none');
             console.error('Error during recognition:', error);
             infoBox.classList.remove('d-none');
             infoBox.textContent = 'Lỗi kết nối: ' + error.message;
             recognitionResults.classList.add('d-none');
+        });
+    }
+    
+    // Draw recognition results on overlay
+    function drawResults(results) {
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        
+        // Thiết lập style cho text
+        ctx.font = 'bold 16px Arial';
+        ctx.lineWidth = 2;
+        
+        results.forEach(result => {
+            const x = result.position[0];
+            const y = result.position[1];
+            
+            // Lấy kích thước khuôn mặt từ backend (hoặc sử dụng giá trị mặc định lớn hơn)
+            const width = result.width || 150;  // Tăng kích thước mặc định
+            const height = result.height || 200; // Tăng kích thước mặc định
+            
+            // Vẽ khung mặt
+            ctx.strokeStyle = result.name === 'Unknown' ? '#ff0000' : '#00ff00';
+            ctx.strokeRect(x, y, width, height);
+            
+            // Tạo background cho text
+            const padding = 5;
+            const textWidth = ctx.measureText(result.name).width;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(x, y + height, width, 25);
+            
+            // Vẽ tên người
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(result.name, x + padding, y + height + 18);
+            
+            // Vẽ độ tin cậy nếu có
+            if (result.confidence) {
+                const confidence = Math.round(100 - result.confidence);
+                const confidenceText = `${confidence}%`;
+                const confidenceX = x + width - ctx.measureText(confidenceText).width - padding;
+                ctx.fillText(confidenceText, confidenceX, y + height + 18);
+            }
         });
     }
     
@@ -210,18 +279,18 @@
             
             results.forEach(result => {
                 const listItem = document.createElement('li');
-                listItem.className = 'list-group-item';
+                listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
                 
-                if (result.name === 'Unknown') {
-                    listItem.innerHTML = `<strong>Không xác định</strong>`;
-                } else {
-                    listItem.innerHTML = `<strong>${result.name}</strong>`;
-                    
-                    if (result.confidence) {
-                        listItem.innerHTML += ` (Độ tin cậy: ${Math.round(100 - result.confidence)}%)`;
-                    }
+                let nameHtml = result.name === 'Unknown' ? 
+                    '<span class="text-danger">Không xác định</span>' : 
+                    `<span class="text-success">${result.name}</span>`;
+                
+                if (result.confidence) {
+                    const confidence = Math.round(100 - result.confidence);
+                    nameHtml += ` <span class="badge bg-${confidence > 70 ? 'success' : confidence > 50 ? 'warning' : 'danger'} rounded-pill">${confidence}%</span>`;
                 }
                 
+                listItem.innerHTML = nameHtml;
                 resultsList.appendChild(listItem);
             });
         } else {
