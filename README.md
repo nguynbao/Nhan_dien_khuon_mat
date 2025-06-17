@@ -1,7 +1,122 @@
-# Hệ thống nhận diện khuôn mặt
+# Hệ Thống Nhận Diện Khuôn Mặt (Face Recognition System)
 
 ## Giới thiệu
-Hệ thống nhận diện khuôn mặt sử dụng OpenCV và Django, cho phép thêm người dùng, chụp ảnh khuôn mặt, huấn luyện mô hình và nhận diện khuôn mặt từ webcam hoặc ảnh tĩnh.
+Đây là một ứng dụng web được xây dựng bằng Django framework, tập trung vào việc nhận diện và xác thực khuôn mặt. Hệ thống này cung cấp các chức năng nhận diện khuôn mặt thời gian thực và có thể được sử dụng trong nhiều lĩnh vực như bảo mật, điểm danh, và xác thực người dùng.
+
+## Phân tích hệ thống
+
+### 1. Các thành phần chính của hệ thống
+
+#### 1.1. Quản lý người dùng (User Management)
+- **DatabaseManager**: Quản lý dữ liệu người dùng trong cơ sở dữ liệu
+  - Thêm người dùng mới
+  - Tạo và quản lý thư mục dataset cho từng người dùng
+  - Đếm số lượng ảnh của mỗi người dùng
+  - Xóa người dùng và dữ liệu liên quan
+
+#### 1.2. Xử lý và nhận diện khuôn mặt
+- **FaceRecognizer**: Module xử lý nhận diện khuôn mặt thời gian thực
+  - Nhận diện khuôn mặt từ video stream
+  - Xử lý frame và trả về kết quả nhận diện
+  
+- **FaceRecognitionFromImage**: Module xử lý nhận diện từ ảnh tĩnh
+  - Upload và xử lý ảnh
+  - Nhận diện khuôn mặt từ ảnh đã upload
+  - Hiển thị kết quả nhận diện
+
+- **TrainModel**: Module huấn luyện mô hình
+  - Huấn luyện mô hình từ dataset người dùng
+  - Lưu trữ mô hình đã train
+
+### 2. Luồng xử lý chính
+
+#### 2.1. Quy trình thêm người dùng mới
+1. Nhập thông tin người dùng (tên)
+2. Tạo ID và thư mục dataset riêng
+3. Chụp ảnh khuôn mặt với các hướng khác nhau:
+   - Hướng thẳng (mặc định)
+   - Các góc nghiêng khác nhau
+4. Xử lý và lưu trữ ảnh:
+   - Lật ảnh ngang (flip)
+   - Vẽ khung hướng dẫn (guide rectangle)
+   - Chuyển đổi sang ảnh xám
+   - Phát hiện và lưu khuôn mặt
+
+#### 2.2. Quy trình nhận diện thời gian thực
+1. Capture frame từ video stream
+2. Chuyển đổi frame sang base64
+3. Xử lý frame:
+   - Phát hiện khuôn mặt
+   - So sánh với mô hình đã train
+4. Trả về kết quả:
+   - Ảnh đã xử lý
+   - Thông tin người được nhận diện
+
+#### 2.3. Quy trình nhận diện từ ảnh
+1. Upload ảnh
+2. Lưu ảnh tạm thời
+3. Xử lý nhận diện
+4. Hiển thị kết quả:
+   - Ảnh gốc
+   - Ảnh đã xử lý
+   - Thông tin nhận diện
+
+### 3. Cấu trúc dữ liệu
+
+#### 3.1. Models
+- **Person**: Thông tin người dùng
+- **CapturedImage**: Lưu trữ ảnh đã chụp
+- **RecognizedFace**: Kết quả nhận diện
+
+#### 3.2. Cấu trúc thư mục
+- **/media/dataSet/**: Chứa dataset của người dùng
+- **/media/temp/**: Lưu trữ ảnh tạm thời
+- **/model/**: Chứa file mô hình đã train (trainner.yml)
+
+### 4. API Endpoints
+
+#### 4.1. Quản lý người dùng
+- `POST /add_user/`: Thêm người dùng mới
+- `POST /delete_person/<person_id>/`: Xóa người dùng
+- `POST /reset_database/`: Reset toàn bộ dữ liệu
+
+#### 4.2. Xử lý ảnh và nhận diện
+- `POST /capture_image/`: API chụp và lưu ảnh
+- `POST /recognize_from_video/`: Nhận diện từ video
+- `POST /upload_image/`: Upload ảnh để nhận diện
+- `GET /recognize_from_image/`: Xử lý nhận diện từ ảnh đã upload
+
+### 5. Yêu cầu kỹ thuật
+
+#### 5.1. Thư viện chính
+- OpenCV (cv2)
+- NumPy
+- PIL (Python Imaging Library)
+- Django
+- Base64 (xử lý ảnh)
+
+#### 5.2. Cấu hình hệ thống
+- Frame Width: Định nghĩa trong FRAME_WIDTH
+- Frame Height: Định nghĩa trong FRAME_HEIGHT
+- Hỗ trợ định dạng ảnh: JPEG, PNG
+
+### 6. Bảo mật
+- CSRF protection cho các form
+- Xác thực cho API endpoints
+- Kiểm tra và xử lý file upload an toàn
+- Quản lý session cho upload ảnh
+
+## Cài đặt và Triển khai
+[Chi tiết hướng dẫn cài đặt...]
+
+## Đóng góp
+Mọi đóng góp cho dự án đều được hoan nghênh. Vui lòng tạo pull request hoặc báo cáo lỗi thông qua mục Issues.
+
+## Giấy phép
+[MIT License](LICENSE)
+
+## Tác giả và Liên hệ
+[Thông tin liên hệ...]
 
 ## Yêu cầu hệ thống
 - Python 3.6+
