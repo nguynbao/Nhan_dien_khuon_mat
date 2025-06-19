@@ -37,8 +37,30 @@ class TrainModel:
 
         return face_samples, ids
 
+    def is_model_trained(self):
+        """Check if model is already trained."""
+        model_path = os.path.join(settings.BASE_DIR, 'model/trainner.yml')
+        if not os.path.exists(model_path):
+            return False
+        
+        # Check if file is not empty
+        if os.path.getsize(model_path) == 0:
+            return False
+            
+        try:
+            # Try to load the model to verify it's valid
+            test_model = cv2.face.LBPHFaceRecognizer_create()
+            test_model.read(model_path)
+            return True
+        except Exception:
+            return False
+
     def train(self):
         """Train the face recognition model."""
+        # Check if model is already trained
+        if self.is_model_trained():
+            return True, "Model is already trained!"
+            
         dataset_path = os.path.join(settings.MEDIA_ROOT, 'dataSet')
         face_samples, ids = self.get_images_and_labels(dataset_path)
         
